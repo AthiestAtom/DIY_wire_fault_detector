@@ -1,0 +1,88 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate HTML files exist
+        run: |
+          echo "✓ Checking for required files..."
+          [ -f "index.html" ] && echo "✓ index.html found" || (echo "✗ index.html missing" && exit 1)
+          [ -f "README.md" ] && echo "✓ README.md found" || (echo "✗ README.md missing" && exit 1)
+          echo "✓ All required files present"
+
+      - name: Validate HTML structure
+        run: |
+          echo "✓ Validating HTML..."
+          python3 << 'EOF'
+          import re
+          
+          with open('index.html', 'r', encoding='utf-8') as f:
+              content = f.read()
+          
+          checks = [
+              ('DOCTYPE', '<!DOCTYPE html>' in content),
+              ('HTML tag', '<html' in content),
+              ('Head tag', '<head>' in content),
+              ('Body tag', '<body>' in content),
+              ('Title', '<title>' in content),
+              ('Styles', '<style>' in content),
+              ('SVG Schematic', '<svg' in content),
+              ('Animation', '@keyframes' in content),
+          ]
+          
+          for name, result in checks:
+              status = '✓' if result else '✗'
+              print(f"{status} {name}")
+              if not result:
+                  exit(1)
+          
+          print("\n✓ HTML structure is valid")
+          EOF
+
+  deploy:
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
+
+      - name: Deployment Summary
+        run: |
+          echo "🚀 Deployment Complete!"
+          echo "📄 Pages deployed successfully"
+          echo "🌐 Your site: https://athestatom.github.io/DIY_wire_fault_detector/"
